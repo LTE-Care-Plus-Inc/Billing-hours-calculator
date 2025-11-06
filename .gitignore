@@ -1,0 +1,30 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# PyInstaller outputs and intermediates
+build/
+dist-new/
+*.spec
+*.toc
+*.pyz
+*.pkg
+base_library.zip
+warn-*.txt
+xref-*.html
+
+# Streamlit cache/state (optional)
+.streamlit/logs/
+.streamlit/cache/
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
