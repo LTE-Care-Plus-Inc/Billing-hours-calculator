@@ -56,6 +56,9 @@ def normalize_colnames(df: pd.DataFrame) -> pd.DataFrame:
     for col in list(df2.columns):
         if col in ALIASES:
             rev[col] = ALIASES[col]
+    # Explicitly normalize Completed Date if present
+    if "completed date" in df2.columns:
+        rev["completed date"] = "Completed Date"
     if rev:
         df2 = df2.rename(columns=rev)
 
@@ -129,10 +132,8 @@ def parse_date_time_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def filter_rows(df: pd.DataFrame) -> pd.DataFrame:
-    def norm(x): return "" if pd.isna(x) else str(x).strip().lower()
-    # Keep service filter, but do NOT filter by Completed anymore
-    svc_ok  = df["Service Name"].apply(lambda x: norm(x) == "direct service bt")
-    out = df[svc_ok].copy()
+    # Include all services and do not filter by Completed
+    out = df.copy()
     return parse_date_time_cols(out)
 
 def aggregate(df_details: pd.DataFrame) -> pd.DataFrame:
@@ -197,16 +198,41 @@ def per_staff_per_day(details: pd.DataFrame, staff_name: str) -> pd.DataFrame:
         # Multiple distinct labels found
         return "Mixed"
 
-    g = df.groupby("_date_key", as_index=False).agg(
-        Total_Minutes=("Rounded Minutes", "sum"),
-        StartMin=(START_COL, "min"),
-        EndMax=(END_COL, "max"),
-        Completed=("Completed", _summarize_completed),
-    )
+    # Summarize Completed Date values: single distinct value -> that value; multiple -> 'Mixed'
+    def _summarize_completed_date(series):
+        try:
+            vals = []
+            for x in series:
+                if pd.isna(x) or x is None:
+                    continue
+                vals.append(str(x).strip())
+            uniq = list(dict.fromkeys([v for v in vals if v]))
+            if len(uniq) == 0:
+                return ""
+            if len(uniq) == 1:
+                return uniq[0]
+            return "Mixed"
+        except Exception:
+            return ""
+
+    agg_dict = {
+        "Total_Minutes": ("Rounded Minutes", "sum"),
+        "StartMin": (START_COL, "min"),
+        "EndMax": (END_COL, "max"),
+        "Completed": ("Completed", _summarize_completed),
+    }
+    if "Completed Date" in df.columns:
+        agg_dict["Completed_Date"] = ("Completed Date", _summarize_completed_date)
+    g = df.groupby("_date_key", as_index=False).agg(**agg_dict)
     g[DATE_COL] = g["_date_key"]
     g["Appt Start"] = g["StartMin"].apply(_fmt_time)
     g["Appt End"]   = g["EndMax"].apply(_fmt_time)
-    g.drop(columns=["_date_key", "StartMin", "EndMax"], inplace=True)
+    for c in ["_date_key", "StartMin", "EndMax"]:
+        if c in g.columns:
+            try:
+                g.drop(columns=[c], inplace=True)
+            except Exception:
+                pass
     g["Total_Hours"] = (g["Total_Minutes"] / 60.0).round(2)
     g["Total_Units"] = (g["Total_Minutes"] / 15.0).round(0).astype("Int64")
     try:
@@ -214,7 +240,29 @@ def per_staff_per_day(details: pd.DataFrame, staff_name: str) -> pd.DataFrame:
         g = g.sort_values(by=["_sort", DATE_COL]).drop(columns=["_sort"])
     except Exception:
         pass
-    return g[[DATE_COL, "Appt Start", "Appt End", "Total_Minutes", "Total_Hours", "Total_Units", "Completed"]]
+    # Add Service Name(s) per day if available
+    if "Service Name" in df.columns:
+        svc_series = (
+            df.groupby("_date_key")["Service Name"]
+              .apply(lambda s: ", ".join(list(dict.fromkeys([str(x).strip() for x in s if not pd.isna(x) and str(x).strip()]))))
+        )
+        svc_df = svc_series.reset_index().rename(columns={"Service Name": "Service Name(s)"})
+        # Merge back on date key
+        svc_df = svc_df.rename(columns={"_date_key": DATE_COL})
+        g = g.merge(svc_df, on=DATE_COL, how="left")
+
+    # Rename Completed_Date to display label
+    if "Completed_Date" in g.columns:
+        g = g.rename(columns={"Completed_Date": "Completed Date"})
+
+    # Order columns with Completed Date next to Completed
+    cols = [DATE_COL, "Appt Start", "Appt End"]
+    if "Service Name(s)" in g.columns:
+        cols.append("Service Name(s)")
+    cols += ["Total_Minutes", "Total_Hours", "Total_Units", "Completed"]
+    if "Completed Date" in g.columns:
+        cols.append("Completed Date")
+    return g[[c for c in cols if c in g.columns]]
 
 def process_file(path: Path):
     df = load_input(path)
@@ -234,6 +282,11 @@ def process_file(path: Path):
     details = df_f.copy()
     details["Effective Minutes"] = eff_minutes
     details["Rounded Minutes"]   = rounded
+    # Provide hours in 0.25 increments derived from Rounded Minutes
+    try:
+        details["Rounded Hours"] = (pd.to_numeric(details["Rounded Minutes"], errors="coerce") / 60.0).round(2)
+    except Exception:
+        details["Rounded Hours"] = pd.NA
     details["Source"]            = sources
     details["Discrepancy"]       = discrepancies
     if invalid_idx:

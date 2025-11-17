@@ -1,0 +1,120 @@
+        self.filtered_df = df
+        self.rebuild_tree()
+        self.update_footer()
+        return
+        if self.sort_var.get() == "Minutes ↓":
+            df = df.sort_values(["Total_Minutes","Staff Name"], ascending=[False, True])
+        else:
+            df = df.sort_values(["Staff Name"], ascending=[True])
+        self.filtered_df = df
+        self.rebuild_tree()
+        self.update_footer()
+
+    def rebuild_tree(self):
+        for item in self.tree.get_children():
+            self.tree.delete(item)
+        if self.filtered_df is None: return
+        for i, (_, row) in enumerate(self.filtered_df.iterrows()):
+            tag = "parent_even" if (i % 2 == 0) else "parent_odd"
+            parent_id = self.tree.insert("", "end", values=(
+                row["Staff Name"],
+                int(row["Total_Minutes"]),
+                f"{row['Total_Hours']:.2f}",
+                int(row["Total_Units"]),
+                "",
+                ""
+            ), tags=(tag, "parent"))
+            self.tree.insert(parent_id, "end", values=("", "", "", "", "", ""), tags=("child",))
+
+    def on_double_click(self, event):
+        item_id = self.tree.identify_row(event.y)
+        if not item_id: return
+        parent = item_id
+        children = self.tree.get_children(parent)
+        if children:
+            vals = self.tree.item(children[0], "values")
+            if any(vals):
+                for c in children: self.tree.delete(c)
+                self.tree.insert(parent, "end", values=("", "", "", "", "", ""), tags=("child",))
+                return
+            else:
+                self.tree.delete(children[0])
+        vals = self.tree.item(parent, "values")
+        if not vals: return
+        staff_name = vals[0]
+        daily = per_staff_per_day(self.details_df, staff_name)
+        if daily.empty:
+            self.tree.insert(parent, "end", values=("  (no dated rows)", "", "", "", "", ""), tags=("child",)); return
+        for _, r in daily.iterrows():
+            self.tree.insert(parent, "end", values=(
+                f"  {r['Appt. Date']}",
+                int(r["Total_Minutes"]),
+                f"{r['Total_Hours']:.2f}",
+                int(r["Total_Units"]),
+                r.get("Appt Start",""),
+                r.get("Appt End","")
+            ), tags=("child",))
+
+    def ensure_outdir(self):
+        if self.input_path is None: raise RuntimeError("No input file loaded")
+        outdir = self.input_path.parent / (self.input_path.stem + "_out")
+        outdir.mkdir(exist_ok=True)
+        return outdir
+
+    def export_excel(self):
+        try:
+            outdir = self.ensure_outdir()
+            xlsx = outdir / "results.xlsx"
+            with pd.ExcelWriter(xlsx, engine="openpyxl") as xl:
+                self.filtered_df.to_excel(xl, index=False, sheet_name="Summary")
+                self.details_df.to_excel(xl, index=False, sheet_name="Details")
+            messagebox.showinfo("Export", f"Wrote: {xlsx}")
+            self.status.set(f"Exported Excel to {xlsx}")
+        except Exception as e:
+            messagebox.showerror("Export Error", str(e))
+
+    def export_csv(self):
+        try:
+            outdir = self.ensure_outdir()
+            self.filtered_df.to_csv(outdir / "summary.csv", index=False)
+            self.details_df.to_csv(outdir / "details.csv", index=False)
+            messagebox.showinfo("Export", f"Wrote: {outdir / 'summary.csv'}\n{outdir / 'details.csv'}")
+            self.status.set(f"Exported CSVs to {outdir}")
+        except Exception as e:
+            messagebox.showerror("Export Error", str(e))
+
+    def export_selected_staff(self):
+        sel = self.tree.selection()
+        if not sel:
+            messagebox.showwarning("Export Staff", "Select a staff row first."); return
+        item_id = sel[0]
+        parent = self.tree.parent(item_id) or item_id
+        vals = self.tree.item(parent, "values")
+        if not vals or not vals[0]:
+            messagebox.showwarning("Export Staff", "Select a staff row (not a date row)."); return
+        staff_name = vals[0]
+        try:
+            outdir = self.ensure_outdir()
+            daily = per_staff_per_day(self.details_df, staff_name)
+            daily.to_csv(outdir / f"{staff_name}_by_day.csv", index=False)
+            staff_rows = self.details_df[self.details_df["Staff Name"] == staff_name]
+            staff_rows.to_csv(outdir / f"{staff_name}_details.csv", index=False)
+            messagebox.showinfo("Export Staff", f"Exported:\n{outdir / (staff_name + '_by_day.csv')}\n{outdir / (staff_name + '_details.csv')}")
+            self.status.set(f"Exported staff details for {staff_name}")
+        except Exception as e:
+            messagebox.showerror("Export Error", str(e))
+
+    def update_footer(self):
+        if self.filtered_df is None or self.filtered_df.empty:
+            self.footer_var.set("Totals: 0 minutes | 0.00 hours | 0 units"); return
+        mins = int(self.filtered_df["Total_Minutes"].sum())
+        hours = round(mins / 60.0, 2)
+        units = int(round(mins / 15.0))
+        self.footer_var.set(f"Totals: {mins} minutes | {hours:.2f} hours | {units} units")
+
+def main():
+    app = App()
+    app.mainloop()
+
+if __name__ == "__main__":
+    main()
