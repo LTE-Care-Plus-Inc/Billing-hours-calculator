@@ -26,14 +26,6 @@ DEFAULT_THEMES = {
         "bg":          "#ffffff",
         "selection":   "#cde4ff",
         "text":        "#000000"
-    },
-    "dark": {
-        "parent_even": "#2b2d31",
-        "parent_odd":  "#1f2124",
-        "child":       "#35383d",
-        "bg":          "#1b1d20",
-        "selection":   "#3d5a80",
-        "text":        "#ffffff"
     }
 }
 
@@ -45,6 +37,8 @@ def load_settings():
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
                 theme_name = data.get("theme_name", "light")
+                if theme_name not in DEFAULT_THEMES:
+                    theme_name = "light"
                 colors = data.get("colors", DEFAULT_THEMES.get(theme_name, DEFAULT_THEMES["light"]))
                 return {"theme_name": theme_name, "colors": colors}
         except Exception:
@@ -115,7 +109,7 @@ class SettingsDialog(tk.Toplevel):
         self.transient(master)
 
     def on_theme_change(self, _evt=None):
-        base = DEFAULT_THEMES[self.current_theme.get()]
+        base = DEFAULT_THEMES.get(self.current_theme.get(), DEFAULT_THEMES["light"])
         for k, v in self.vars.items():
             v.set(base[k])
 
@@ -179,7 +173,6 @@ class App(tk.Tk if not DND_AVAILABLE else TkinterDnD.Tk):
         settings_menu = tk.Menu(menubar, tearoff=0)
         theme_menu = tk.Menu(settings_menu, tearoff=0)
         theme_menu.add_command(label="Light", command=lambda: self.set_theme("light"))
-        theme_menu.add_command(label="Dark", command=lambda: self.set_theme("dark"))
         settings_menu.add_cascade(label="Theme", menu=theme_menu)
         settings_menu.add_command(label="Edit Colors...", command=self.open_settings_dialog)
         menubar.add_cascade(label="Settings", menu=settings_menu)
@@ -285,15 +278,16 @@ class App(tk.Tk if not DND_AVAILABLE else TkinterDnD.Tk):
 
     # Theme / Settings
     def set_theme(self, name):
-        self.theme_name = name
-        self.colors = DEFAULT_THEMES[name].copy()
+        self.theme_name = name if name in DEFAULT_THEMES else "light"
+        self.colors = DEFAULT_THEMES[self.theme_name].copy()
         save_settings(self.theme_name, self.colors)
         self._setup_style()
         self._apply_colors()
 
     def open_settings_dialog(self):
         def on_apply(theme_name, colors):
-            self.theme_name = theme_name
+            # Sanitize theme to light only
+            self.theme_name = theme_name if theme_name in DEFAULT_THEMES else "light"
             self.colors = colors
             save_settings(self.theme_name, self.colors)
             self._setup_style()
@@ -408,6 +402,18 @@ class App(tk.Tk if not DND_AVAILABLE else TkinterDnD.Tk):
         if not vals: return
         staff_name = vals[0]
         daily = per_staff_per_day(self.details_df, staff_name)
+        # Insert a small note row if this staff has incomplete sessions excluded
+        try:
+            cnt = 0
+            if self.details_df is not None and not self.details_df.empty and "Incomplete_Excluded_Count" in self.details_df.columns:
+                _rows = self.details_df[self.details_df["Staff Name"].astype(str) == str(staff_name)]
+                if not _rows.empty:
+                    _val = pd.to_numeric(_rows["Incomplete_Excluded_Count"], errors='coerce').max()
+                    cnt = int(_val) if pd.notna(_val) else 0
+            if cnt > 0:
+                self.tree.insert(parent, "end", values=(f"  Note: {cnt} incomplete session(s) were excluded from billing", "", "", "", "", ""), tags=("child",))
+        except Exception:
+            pass
         if daily.empty:
             self.tree.insert(parent, "end", values=("  (no dated rows)", "", "", "", "", ""), tags=("child",)); return
         for _, r in daily.iterrows():

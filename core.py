@@ -132,8 +132,34 @@ def parse_date_time_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 def filter_rows(df: pd.DataFrame) -> pd.DataFrame:
-    # Include all services and do not filter by Completed
+    # Only include sessions that are completed for billing
     out = df.copy()
+    try:
+        comp_series = out.get("Completed")
+        if comp_series is None:
+            # If no Completed column (should not happen due to REQUIRED), keep empty
+            out = out.iloc[0:0]
+        else:
+            # Normalize completion values
+            comp_norm = comp_series.apply(lambda v: "" if pd.isna(v) else str(v).strip().lower())
+            complete_markers = {
+                "yes", "y", "true", "complete", "completed", "done", "signed", "finished", "finalized"
+            }
+            mask_yes = comp_norm.isin(complete_markers)
+
+            # Treat presence of a Completed Date as completed
+            if "Completed Date" in out.columns:
+                mask_date = out["Completed Date"].apply(
+                    lambda v: False if (pd.isna(v) or str(v).strip() == "") else True
+                )
+            else:
+                mask_date = False
+
+            mask = mask_yes | mask_date
+            out = out[mask].copy()
+    except Exception:
+        # On any unexpected error, fall back to original rows
+        out = df.copy()
     return parse_date_time_cols(out)
 
 def aggregate(df_details: pd.DataFrame) -> pd.DataFrame:
@@ -267,6 +293,35 @@ def per_staff_per_day(details: pd.DataFrame, staff_name: str) -> pd.DataFrame:
 def process_file(path: Path):
     df = load_input(path)
     df = normalize_colnames(df)
+
+    # Compute per-staff count of sessions excluded due to being incomplete
+    incomplete_by_staff = {}
+    try:
+        comp_series = df.get("Completed")
+        if comp_series is not None:
+            comp_norm = comp_series.apply(lambda v: "" if pd.isna(v) else str(v).strip().lower())
+            complete_markers = {"yes", "y", "true", "complete", "completed", "done", "signed", "finished", "finalized"}
+            mask_yes = comp_norm.isin(complete_markers)
+            if "Completed Date" in df.columns:
+                mask_date = df["Completed Date"].apply(lambda v: False if (pd.isna(v) or str(v).strip() == "") else True)
+            else:
+                mask_date = False
+            if isinstance(mask_date, bool):
+                mask_completed = mask_yes
+            else:
+                mask_completed = mask_yes | mask_date
+            mask_incomplete = ~mask_completed
+            try:
+                tmp = df.loc[mask_incomplete].copy()
+                tmp["Staff Name"] = tmp["Staff Name"].astype(str)
+                incomplete_by_staff = tmp.groupby("Staff Name", dropna=False).size().to_dict()
+            except Exception:
+                incomplete_by_staff = {}
+        else:
+            incomplete_by_staff = {}
+    except Exception:
+        incomplete_by_staff = {}
+
     df_f = filter_rows(df)
 
     eff_minutes, sources, rounded, discrepancies, invalid_idx = [], [], [], [], []
@@ -292,5 +347,18 @@ def process_file(path: Path):
     if invalid_idx:
         details = details.drop(index=invalid_idx)
 
+    # Attach per-staff incomplete counts to details rows
+    try:
+        details["Incomplete_Excluded_Count"] = details["Staff Name"].astype(str).map(lambda s: int(incomplete_by_staff.get(s, 0))).astype("Int64")
+        details["Has_Incomplete_Excluded"] = details["Incomplete_Excluded_Count"].apply(lambda x: False if pd.isna(x) else bool(int(x) > 0))
+    except Exception:
+        pass
+
     summary = aggregate(details).sort_values(["Staff Name"], ascending=[True])
+    # Attach per-staff incomplete counts to summary too (for UI convenience)
+    try:
+        summary["Incomplete_Excluded_Count"] = summary["Staff Name"].astype(str).map(lambda s: int(incomplete_by_staff.get(s, 0))).astype("Int64")
+        summary["Has_Incomplete_Excluded"] = summary["Incomplete_Excluded_Count"].apply(lambda x: False if pd.isna(x) else bool(int(x) > 0))
+    except Exception:
+        pass
     return summary, details

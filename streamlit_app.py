@@ -532,15 +532,12 @@ def main():
 
         use_sample = st.button("Use bundled sample data")
 
-        st.header("Theme")
-        if "theme" not in st.session_state:
-            st.session_state.theme = "light"
-        theme_choice = st.radio("Mode", ["Light", "Dark"], index=(1 if st.session_state.theme=="dark" else 0))
-        st.session_state.theme = theme_choice.lower()
+        # Theme: dark mode setting removed; always use light
+        st.session_state.theme = "light"
 
-    _apply_theme(st.session_state.theme)
-    # Additional UI polish and higher-contrast dark mode (no functional changes)
-    _t = (st.session_state.get("theme") or "light").lower()
+    _apply_theme("light")
+    # Additional UI polish (light mode only)
+    _t = "light"
     if _t == "dark":
         _bg = "#0f1419"; _text = "#e6edf3"; _sbg = "#161b22"; _input = "#1b222c"; _border = "#2d333b"; _link = "#58a6ff"; _primary = "#2C7BE5"; _ph = "rgba(230,237,243,0.85)"
     else:
@@ -850,7 +847,7 @@ def main():
             gob.configure_pagination(enabled=True, paginationAutoPageSize=False, paginationPageSize=25)
             grid_options = gob.build()
 
-            ag_theme = "balham-dark" if st.session_state.get("theme") == "dark" else "balham"
+            ag_theme = "balham"
             grid_response = AgGrid(
                 df_grid,
                 gridOptions=grid_options,
@@ -925,6 +922,18 @@ def main():
                                 _ot = payroll_hours_ot.get(_norm_name(name))
                                 if _ot is not None and _ot > 0:
                                     st.markdown(f"### Overtime Hours (payroll): {_ot:.2f}")
+                        except Exception:
+                            pass
+                        # Small note if this staff has incomplete sessions excluded from billing
+                        try:
+                            _cnt = 0
+                            if details_df is not None and not details_df.empty and "Incomplete_Excluded_Count" in details_df.columns:
+                                _rows = details_df[details_df["Staff Name"].astype(str) == str(name)]
+                                if not _rows.empty:
+                                    _val = pd.to_numeric(_rows["Incomplete_Excluded_Count"], errors='coerce').max()
+                                    _cnt = int(_val) if pd.notna(_val) else 0
+                            if _cnt > 0:
+                                st.caption(f"Note: {_cnt} incomplete session(s) were excluded from billing calculations.")
                         except Exception:
                             pass
                         try:
@@ -1038,6 +1047,18 @@ def main():
                                 st.markdown(f"### Overtime Hours (payroll): {_ot:.2f}")
                     except Exception:
                         pass
+                    # Small note if this staff has incomplete sessions excluded from billing
+                    try:
+                        _cnt = 0
+                        if details_df is not None and not details_df.empty and "Incomplete_Excluded_Count" in details_df.columns:
+                            _rows = details_df[details_df["Staff Name"].astype(str) == str(name)]
+                            if not _rows.empty:
+                                _val = pd.to_numeric(_rows["Incomplete_Excluded_Count"], errors='coerce').max()
+                                _cnt = int(_val) if pd.notna(_val) else 0
+                        if _cnt > 0:
+                            st.caption(f"Note: {_cnt} incomplete session(s) were excluded from billing calculations.")
+                    except Exception:
+                        pass
                     # Lazy render: only compute when toggled
                     show_daily = st.checkbox("Show per-day breakdown", value=False, key=f"show_daily_inline_{name}")
                     if show_daily:
@@ -1138,6 +1159,18 @@ def main():
                     st.markdown(f"### Overtime Hours (payroll): {_ot:.2f}")
         except Exception:
             pass
+        # Small note if this staff has incomplete sessions excluded from billing
+        try:
+            _cnt = 0
+            if details_df is not None and not details_df.empty and "Incomplete_Excluded_Count" in details_df.columns:
+                _rows = details_df[details_df["Staff Name"].astype(str) == str(selected)]
+                if not _rows.empty:
+                    _val = pd.to_numeric(_rows["Incomplete_Excluded_Count"], errors='coerce').max()
+                    _cnt = int(_val) if pd.notna(_val) else 0
+            if _cnt > 0:
+                st.caption(f"Note: {_cnt} incomplete session(s) were excluded from billing calculations.")
+        except Exception:
+            pass
 
         if payroll_map is not None:
             rate = payroll_map.get(_norm_name(selected))
@@ -1224,6 +1257,18 @@ def main():
                         _ot = payroll_hours_ot.get(_norm_name(staff))
                         if _ot is not None and _ot > 0:
                             st.markdown(f"### Overtime Hours (payroll): {_ot:.2f}")
+                except Exception:
+                    pass
+                # Small note if this staff has incomplete sessions excluded from billing
+                try:
+                    _cnt = 0
+                    if details_df is not None and not details_df.empty and "Incomplete_Excluded_Count" in details_df.columns:
+                        _rows = details_df[details_df["Staff Name"].astype(str) == str(staff)]
+                        if not _rows.empty:
+                            _val = pd.to_numeric(_rows["Incomplete_Excluded_Count"], errors='coerce').max()
+                            _cnt = int(_val) if pd.notna(_val) else 0
+                    if _cnt > 0:
+                        st.caption(f"Note: {_cnt} incomplete session(s) were excluded from billing calculations.")
                 except Exception:
                     pass
                 try:
