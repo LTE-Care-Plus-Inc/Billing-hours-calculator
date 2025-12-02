@@ -14,6 +14,7 @@ from core import process_file, per_staff_per_day, DATE_COL, START_COL, END_COL, 
 
 
 APP_TITLE = "Billable Hours Aggregator"
+CACHE_BUST = 2  # bump to invalidate cached results after rounding logic changes
 
 
 def _apply_theme(theme: str):
@@ -47,7 +48,7 @@ def _apply_theme(theme: str):
 
 
 @st.cache_data(show_spinner=False)
-def _process_billable_bytes(content: bytes, suffix: str):
+def _process_billable_bytes(content: bytes, suffix: str, cache_bust: int = CACHE_BUST):
     with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
         tmp.write(content)
         tmp_path = Path(tmp.name)
@@ -63,7 +64,7 @@ def _process_billable_bytes(content: bytes, suffix: str):
 def _process_uploaded_file(uploaded_file) -> tuple[pd.DataFrame, pd.DataFrame]:
     suffix = Path(uploaded_file.name).suffix.lower()
     content = uploaded_file.getbuffer().tobytes()
-    summary, details = _process_billable_bytes(content, suffix)
+    summary, details = _process_billable_bytes(content, suffix, CACHE_BUST)
     return summary, details
 
 
