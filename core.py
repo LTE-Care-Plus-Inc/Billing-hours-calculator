@@ -102,6 +102,37 @@ def discrepancy_flag(row):
     alt = h * 60.0 if h is not None else (u * 15.0 if u is not None else None)
     return False if alt is None else abs(bm - alt) > 7
 
+def session_duration_minutes(row):
+    """Compute duration from Appt. Start to Appt. End in minutes, if both are valid."""
+    try:
+        date_val = row.get(DATE_COL)
+        start_raw = row.get(START_COL)
+        end_raw = row.get(END_COL)
+        if pd.isna(start_raw) or pd.isna(end_raw):
+            return None
+
+        # Try parsing with date first for better accuracy, else fall back to time-only
+        if pd.isna(date_val):
+            start = pd.to_datetime(start_raw, errors="coerce")
+            end = pd.to_datetime(end_raw, errors="coerce")
+        else:
+            start = pd.to_datetime(f"{date_val} {start_raw}", errors="coerce")
+            end = pd.to_datetime(f"{date_val} {end_raw}", errors="coerce")
+
+        if pd.isna(start) or pd.isna(end):
+            # Final fallback: time-only parsing
+            start = pd.to_datetime(start_raw, errors="coerce")
+            end = pd.to_datetime(end_raw, errors="coerce")
+
+        if pd.isna(start) or pd.isna(end):
+            return None
+
+        delta = end - start
+        mins = delta.total_seconds() / 60.0
+        return mins if mins >= 0 else None
+    except Exception:
+        return None
+
 def load_input(path: Path) -> pd.DataFrame:
     suf = path.suffix.lower()
     if suf in [".xlsx", ".xlsm", ".xltx", ".xltm"]:
@@ -327,11 +358,19 @@ def process_file(path: Path):
     eff_minutes, sources, rounded, discrepancies, invalid_idx = [], [], [], [], []
     for idx, row in df_f.iterrows():
         m, src = effective_minutes(row)
+        duration_m = session_duration_minutes(row)
         if m is None or (isinstance(m, (int, float)) and (m < 0 or m > 24*60)):
             invalid_idx.append(idx)
             eff_minutes.append(None); sources.append(src or ""); rounded.append(None); discrepancies.append(False)
             continue
         r = round_15_with_8_rule(m)
+        # Cap rounded minutes to the scheduled duration (floor to 15-min blocks) when start/end are present
+        if duration_m is not None and r is not None:
+            try:
+                dur_cap = int(float(duration_m) // 15) * 15  # floor to nearest 15 to avoid slight overages
+                r = min(r, dur_cap)
+            except Exception:
+                pass
         eff_minutes.append(m); sources.append(src or ""); rounded.append(r); discrepancies.append(discrepancy_flag(row))
 
     details = df_f.copy()
