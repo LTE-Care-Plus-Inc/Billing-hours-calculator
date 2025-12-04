@@ -10,11 +10,12 @@ import streamlit as st
 from st_aggrid import AgGrid, GridOptionsBuilder, GridUpdateMode, DataReturnMode
 from st_aggrid.shared import JsCode
 
-from core import process_file, per_staff_per_day, DATE_COL, START_COL, END_COL, _fmt_time, load_input
+# Use the units-only core so units match the source file exactly
+from core_units import process_file, per_staff_per_day, DATE_COL, START_COL, END_COL, _fmt_time, load_input
 
 
 APP_TITLE = "Billable Hours Aggregator"
-CACHE_BUST = 2  # bump to invalidate cached results after rounding logic changes
+CACHE_BUST = 3  # bump to invalidate cached results after rounding logic changes
 
 
 def _apply_theme(theme: str):
