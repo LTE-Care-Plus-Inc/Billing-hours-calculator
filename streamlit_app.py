@@ -697,7 +697,7 @@ def main():
             st.error(f"Failed to process uploaded file: {e}")
 
     elif use_sample:
-        sample_path = Path(__file__).parent / "sample_data.xlsx"
+        sample_path = Path(__file__).parent / "sample_data_new.xlsx"
         if not sample_path.exists():
             st.warning("Sample file not found next to the app.")
         else:
