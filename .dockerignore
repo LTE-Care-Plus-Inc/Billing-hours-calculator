@@ -2,8 +2,9 @@
 .gitignore
 .venv
 venv
+env
 __pycache__/
-*.pyc
+*.py[cod]
 *.pyo
 *.pyd
 .pytest_cache/
@@ -15,3 +16,32 @@ Thumbs.db
 .devcontainer/
 agent-transcripts/
 *.log
+
+# PyInstaller / local build outputs (not used by Streamlit container)
+build/
+dist-new/
+*.spec
+*.toc
+*.pyz
+*.pkg
+base_library.zip
+warn-*.txt
+xref-*.html
+
+# Streamlit local state
+.streamlit/logs/
+.streamlit/cache/
+
+# SonarQube and local docker compose (same as .gitignore)
+.env
+docker-compose.yml
+docker-compose.streamlit.yml
+run-sonarqube-report.ps1
+sonar-project.properties
+
+# Editor / scratch
+*.swp
+*.swo
+billables_gui_v*.code-workspace
+temp_head.txt
+temp_tail.txt
