@@ -3,7 +3,7 @@
 This project includes the original Tkinter GUI and a Streamlit web app. The instructions below focus on running the Streamlit app (no EXE packaging).
 
 Highlights
-- Upload CSV/Excel or use the bundled `sample_data.xlsx`
+- Upload CSV/Excel or use the bundled `sample_data_new.xlsx` (sidebar: “Use bundled sample data”)
 - Search and sort staff summary
 - Per-staff per-day breakdown with Appt Start/End
 - Download filtered `summary.csv`, full `details.csv`, combined `results.xlsx`
@@ -25,5 +25,6 @@ Security notes
 - Existing `docker-compose.yml` remains for SonarQube workflow
 
 Theme
-- Default theme is defined in `.streamlit/config.toml` (light base).
+- Local dev: `.streamlit/config.toml` (not included in the Docker image).
+- Kubernetes: `config.toml` is rendered by Helm (`lte-apps-helm/deploy/helm/billing-hours-calculator`).
 - A sidebar toggle applies a simple light/dark CSS override at runtime.

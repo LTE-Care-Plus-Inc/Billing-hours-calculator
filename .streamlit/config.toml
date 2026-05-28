@@ -1,3 +1,6 @@
+# Local development only (`streamlit run`). Cluster config comes from lte-apps-helm
+# deploy/helm/billing-hours-calculator values.yaml → streamlitConfig (ConfigMap).
+
 [theme]
 base = "light"
 primaryColor = "#2C7BE5"
@@ -7,4 +10,3 @@ textColor = "#000000"
 
 [browser]
 gatherUsageStats = false
-

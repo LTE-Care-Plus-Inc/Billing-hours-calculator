@@ -28,7 +28,8 @@ base_library.zip
 warn-*.txt
 xref-*.html
 
-# Streamlit local state
+# Streamlit — config.toml is supplied by Helm in cluster; keep for local `streamlit run` only
+.streamlit/config.toml
 .streamlit/logs/
 .streamlit/cache/
 
@@ -38,6 +39,9 @@ docker-compose.yml
 docker-compose.streamlit.yml
 run-sonarqube-report.ps1
 sonar-project.properties
+
+# Sample data — only sample_data_new.xlsx is bundled (sidebar demo button)
+sample_data.xlsx
 
 # Editor / scratch
 *.swp

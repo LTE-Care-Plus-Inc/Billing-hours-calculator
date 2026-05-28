@@ -29,6 +29,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# Legacy sample (app uses sample_data_new.xlsx only)
+sample_data.xlsx
+
 # sonarqube and local docker compose
 .env
 docker-compose.yml
