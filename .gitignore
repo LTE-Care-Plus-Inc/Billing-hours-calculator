@@ -28,3 +28,10 @@ xref-*.html
 Thumbs.db
 *.swp
 *.swo
+
+# sonarqube and local docker compose
+.env
+docker-compose.yml
+docker-compose.streamlit.yml
+run-sonarqube-report.ps1
+sonar-project.properties
